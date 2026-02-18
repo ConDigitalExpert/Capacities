@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - master
+      - "claude/**"
   # Allow manual trigger from Actions tab
   workflow_dispatch:
 
