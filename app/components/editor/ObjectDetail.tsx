@@ -1,11 +1,14 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { CapacityObject, ObjectType } from '../../lib/types';
+import { templatesByType } from '../../lib/templates';
+import { exportMarkdown } from '../../lib/export';
 import RichEditor from './RichEditor';
 import {
-  Tag, Link2, Trash2, Star, User, Book, Newspaper, Video,
-  Calendar, FileText, Plus, X, ExternalLink,
+  Tag, Link2, Trash2, User, Newspaper,
+  Plus, X, ExternalLink, ArrowLeft, Download,
+  LayoutTemplate, ChevronDown,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -16,6 +19,7 @@ interface Props {
   onDelete: (id: string) => void;
   onSelect: (id: string) => void;
   onLink: (fromId: string, toId: string) => void;
+  onBack?: () => void;
 }
 
 const TYPE_COLORS: Record<ObjectType, string> = {
@@ -28,16 +32,27 @@ const TYPE_COLORS: Record<ObjectType, string> = {
   tag: 'bg-gray-500/20 text-gray-300',
 };
 
-export default function ObjectDetail({ obj, allObjects, onUpdate, onDelete, onSelect, onLink }: Props) {
+export default function ObjectDetail({ obj, allObjects, onUpdate, onDelete, onSelect, onLink, onBack }: Props) {
   const [tagInput, setTagInput] = useState('');
   const [showLinkPicker, setShowLinkPicker] = useState(false);
   const [linkSearch, setLinkSearch] = useState('');
+  const [showTemplates, setShowTemplates] = useState(false);
 
-  const linkedObjects = allObjects.filter((o) => obj.linkedIds.includes(o.id));
-  const linkCandidates = allObjects.filter(
-    (o) => o.id !== obj.id && !obj.linkedIds.includes(o.id) &&
-      (linkSearch.trim() === '' || o.title.toLowerCase().includes(linkSearch.toLowerCase()))
+  // Backlinks: objects that link TO this one
+  const backlinks = allObjects.filter(
+    (o) => o.id !== obj.id && o.linkedIds.includes(obj.id),
   );
+  // Forward links
+  const linkedObjects = allObjects.filter((o) => obj.linkedIds.includes(o.id));
+
+  const linkCandidates = allObjects.filter(
+    (o) =>
+      o.id !== obj.id &&
+      !obj.linkedIds.includes(o.id) &&
+      (linkSearch.trim() === '' || o.title.toLowerCase().includes(linkSearch.toLowerCase())),
+  );
+
+  const templates = templatesByType(obj.type);
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onUpdate(obj.id, { title: e.target.value });
@@ -61,22 +76,72 @@ export default function ObjectDetail({ obj, allObjects, onUpdate, onDelete, onSe
     setLinkSearch('');
   };
 
+  const applyTemplate = (content: object) => {
+    onUpdate(obj.id, { content: JSON.stringify(content) });
+    setShowTemplates(false);
+  };
+
   return (
     <div className="flex flex-col h-full overflow-y-auto">
       {/* Top bar */}
-      <div className="flex items-center justify-between px-8 py-4 border-b border-white/10">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between px-4 sm:px-8 py-3 border-b border-white/10 gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          {onBack && (
+            <button onClick={onBack} className="text-white/40 hover:text-white transition-colors mr-1">
+              <ArrowLeft size={16} />
+            </button>
+          )}
           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TYPE_COLORS[obj.type]}`}>
             {obj.type}
           </span>
           {obj.date && (
-            <span className="text-white/30 text-xs">{format(new Date(obj.date), 'EEEE, MMMM d, yyyy')}</span>
+            <span className="text-white/30 text-xs hidden sm:inline">
+              {format(new Date(obj.date + 'T12:00:00'), 'EEEE, MMMM d, yyyy')}
+            </span>
           )}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-white/20 text-xs">
-            Updated {format(new Date(obj.updatedAt), 'MMM d, yyyy')}
+          <span className="text-white/20 text-xs hidden sm:inline">
+            {format(new Date(obj.updatedAt), 'MMM d')}
           </span>
+          {/* Templates */}
+          {templates.length > 0 && (
+            <div className="relative">
+              <button
+                onClick={() => setShowTemplates(!showTemplates)}
+                className="flex items-center gap-1 text-white/40 hover:text-white transition-colors text-xs border border-white/10 rounded px-2 py-1"
+                title="Apply template"
+              >
+                <LayoutTemplate size={12} />
+                <ChevronDown size={10} />
+              </button>
+              {showTemplates && (
+                <div className="absolute right-0 top-full mt-1 z-20 bg-[#1a1a2e] border border-white/10 rounded-lg shadow-xl overflow-hidden w-48">
+                  <p className="text-white/30 text-xs px-3 py-1.5 border-b border-white/10 uppercase tracking-widest">
+                    Templates
+                  </p>
+                  {templates.map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => applyTemplate(t.content)}
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm text-white/70 hover:bg-white/5 hover:text-white text-left"
+                    >
+                      <span>{t.icon}</span>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {/* Export */}
+          <button
+            onClick={() => exportMarkdown(obj)}
+            className="text-white/30 hover:text-white transition-colors"
+            title="Export as Markdown"
+          >
+            <Download size={15} />
+          </button>
           <button
             onClick={() => onDelete(obj.id)}
             className="text-white/30 hover:text-red-400 transition-colors"
@@ -88,7 +153,7 @@ export default function ObjectDetail({ obj, allObjects, onUpdate, onDelete, onSe
       </div>
 
       {/* Main content */}
-      <div className="flex-1 px-8 py-6 space-y-6">
+      <div className="flex-1 px-4 sm:px-8 py-6 space-y-5">
         {/* Title */}
         <div className="flex items-center gap-3">
           <span className="text-3xl">{obj.icon ?? '📝'}</span>
@@ -97,7 +162,7 @@ export default function ObjectDetail({ obj, allObjects, onUpdate, onDelete, onSe
             value={obj.title}
             onChange={handleTitleChange}
             placeholder="Untitled"
-            className="flex-1 bg-transparent text-white text-2xl font-bold outline-none placeholder-white/20"
+            className="flex-1 bg-transparent text-white text-xl sm:text-2xl font-bold outline-none placeholder-white/20"
           />
         </div>
 
@@ -122,13 +187,14 @@ export default function ObjectDetail({ obj, allObjects, onUpdate, onDelete, onSe
             type="text"
             value={tagInput}
             onChange={(e) => setTagInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(); } }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(); }
+            }}
             placeholder="Add tag…"
             className="bg-transparent text-white/40 text-xs outline-none w-24 placeholder-white/20"
           />
         </div>
 
-        {/* Divider */}
         <div className="border-t border-white/5" />
 
         {/* Editor */}
@@ -138,75 +204,122 @@ export default function ObjectDetail({ obj, allObjects, onUpdate, onDelete, onSe
           placeholder="Start writing…"
         />
 
-        {/* Linked objects */}
-        <div className="border-t border-white/5 pt-4">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-white/40 text-xs uppercase tracking-widest flex items-center gap-1.5">
-              <Link2 size={12} />
-              Linked Objects ({linkedObjects.length})
-            </span>
-            <button
-              onClick={() => setShowLinkPicker(!showLinkPicker)}
-              className="text-white/30 hover:text-white transition-colors flex items-center gap-1 text-xs"
-            >
-              <Plus size={12} /> Link
-            </button>
+        {/* ── Links section ───────────────────────────────────────────────────── */}
+        <div className="border-t border-white/5 pt-4 space-y-5">
+
+          {/* Forward links */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-white/40 text-xs uppercase tracking-widest flex items-center gap-1.5">
+                <Link2 size={12} />
+                Links ({linkedObjects.length})
+              </span>
+              <button
+                onClick={() => setShowLinkPicker(!showLinkPicker)}
+                className="text-white/30 hover:text-white transition-colors flex items-center gap-1 text-xs"
+              >
+                <Plus size={12} /> Link
+              </button>
+            </div>
+
+            {showLinkPicker && (
+              <div className="mb-3 bg-white/5 rounded-lg border border-white/10 overflow-hidden">
+                <input
+                  type="text"
+                  autoFocus
+                  value={linkSearch}
+                  onChange={(e) => setLinkSearch(e.target.value)}
+                  placeholder="Search to link…"
+                  className="w-full bg-transparent px-3 py-2 text-sm text-white/80 outline-none border-b border-white/10 placeholder-white/30"
+                />
+                <div className="max-h-48 overflow-y-auto">
+                  {linkCandidates.slice(0, 20).map((candidate) => (
+                    <button
+                      key={candidate.id}
+                      onClick={() => handleLink(candidate.id)}
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm text-white/70 hover:bg-white/10 hover:text-white text-left"
+                    >
+                      <span>{candidate.icon}</span>
+                      <span className="truncate">{candidate.title}</span>
+                      <span className={`ml-auto text-xs px-1.5 py-0.5 rounded ${TYPE_COLORS[candidate.type]}`}>
+                        {candidate.type}
+                      </span>
+                    </button>
+                  ))}
+                  {linkCandidates.length === 0 && (
+                    <p className="text-white/30 text-xs px-3 py-3">No objects found.</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 gap-1.5">
+              {linkedObjects.map((linked) => (
+                <LinkedCard key={linked.id} obj={linked} onSelect={onSelect} typeColors={TYPE_COLORS} />
+              ))}
+              {linkedObjects.length === 0 && (
+                <p className="text-white/20 text-xs">No links yet. Add one above.</p>
+              )}
+            </div>
           </div>
 
-          {showLinkPicker && (
-            <div className="mb-3 bg-white/5 rounded-lg border border-white/10 overflow-hidden">
-              <input
-                type="text"
-                autoFocus
-                value={linkSearch}
-                onChange={(e) => setLinkSearch(e.target.value)}
-                placeholder="Search to link…"
-                className="w-full bg-transparent px-3 py-2 text-sm text-white/80 outline-none border-b border-white/10 placeholder-white/30"
-              />
-              <div className="max-h-48 overflow-y-auto">
-                {linkCandidates.slice(0, 20).map((candidate) => (
-                  <button
-                    key={candidate.id}
-                    onClick={() => handleLink(candidate.id)}
-                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-white/70 hover:bg-white/10 hover:text-white text-left"
-                  >
-                    <span>{candidate.icon}</span>
-                    <span className="truncate">{candidate.title}</span>
-                    <span className={`ml-auto text-xs px-1.5 py-0.5 rounded ${TYPE_COLORS[candidate.type]}`}>
-                      {candidate.type}
-                    </span>
-                  </button>
+          {/* Backlinks */}
+          {backlinks.length > 0 && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <ArrowLeft size={12} className="text-white/40" />
+                <span className="text-white/40 text-xs uppercase tracking-widest">
+                  Backlinks ({backlinks.length})
+                </span>
+              </div>
+              <div className="grid grid-cols-1 gap-1.5">
+                {backlinks.map((linked) => (
+                  <LinkedCard key={linked.id} obj={linked} onSelect={onSelect} typeColors={TYPE_COLORS} dim />
                 ))}
-                {linkCandidates.length === 0 && (
-                  <p className="text-white/30 text-xs px-3 py-3">No objects found.</p>
-                )}
               </div>
             </div>
           )}
-
-          <div className="grid grid-cols-1 gap-2">
-            {linkedObjects.map((linked) => (
-              <button
-                key={linked.id}
-                onClick={() => onSelect(linked.id)}
-                className="flex items-center gap-3 bg-white/5 hover:bg-white/10 rounded-lg px-3 py-2 text-left transition-colors group"
-              >
-                <span>{linked.icon}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-white/80 text-sm font-medium truncate">{linked.title}</p>
-                  <p className="text-white/30 text-xs">{linked.type}</p>
-                </div>
-                <ExternalLink size={12} className="text-white/20 group-hover:text-white/50 shrink-0" />
-              </button>
-            ))}
-          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function TypeMeta({ obj, onUpdate }: { obj: CapacityObject; onUpdate: (id: string, p: Partial<CapacityObject>) => void }) {
+function LinkedCard({
+  obj,
+  onSelect,
+  typeColors,
+  dim,
+}: {
+  obj: CapacityObject;
+  onSelect: (id: string) => void;
+  typeColors: Record<ObjectType, string>;
+  dim?: boolean;
+}) {
+  return (
+    <button
+      onClick={() => onSelect(obj.id)}
+      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors group ${
+        dim ? 'bg-white/3 hover:bg-white/6' : 'bg-white/5 hover:bg-white/10'
+      }`}
+    >
+      <span>{obj.icon}</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-white/80 text-sm font-medium truncate">{obj.title}</p>
+      </div>
+      <span className={`text-xs px-1.5 py-0.5 rounded ${typeColors[obj.type]}`}>{obj.type}</span>
+      <ExternalLink size={11} className="text-white/20 group-hover:text-white/50 shrink-0" />
+    </button>
+  );
+}
+
+function TypeMeta({
+  obj,
+  onUpdate,
+}: {
+  obj: CapacityObject;
+  onUpdate: (id: string, p: Partial<CapacityObject>) => void;
+}) {
   if (obj.type === 'book') {
     return (
       <div className="flex flex-wrap items-center gap-4 text-sm text-white/50">
@@ -220,19 +333,33 @@ function TypeMeta({ obj, onUpdate }: { obj: CapacityObject; onUpdate: (id: strin
             className="bg-transparent outline-none text-white/70 placeholder-white/20 w-40"
           />
         </label>
-        <label className="flex items-center gap-2">
-          <Star size={13} />
-          <input
-            type="number"
-            min={1}
-            max={5}
-            value={obj.rating ?? ''}
-            onChange={(e) => onUpdate(obj.id, { rating: Number(e.target.value) })}
-            placeholder="Rating"
-            className="bg-transparent outline-none text-white/70 placeholder-white/20 w-12"
-          />
-          <span className="text-xs">/5</span>
+        <label className="flex items-center gap-1">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button
+              key={n}
+              onClick={() => onUpdate(obj.id, { rating: n })}
+              className={`text-lg transition-colors ${n <= (obj.rating ?? 0) ? 'text-amber-400' : 'text-white/15 hover:text-amber-400/50'}`}
+            >
+              ★
+            </button>
+          ))}
         </label>
+      </div>
+    );
+  }
+
+  if (obj.type === 'media') {
+    return (
+      <div className="flex items-center gap-1">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            onClick={() => onUpdate(obj.id, { rating: n })}
+            className={`text-lg transition-colors ${n <= (obj.rating ?? 0) ? 'text-amber-400' : 'text-white/15 hover:text-amber-400/50'}`}
+          >
+            ★
+          </button>
+        ))}
       </div>
     );
   }
@@ -253,15 +380,6 @@ function TypeMeta({ obj, onUpdate }: { obj: CapacityObject; onUpdate: (id: strin
             <ExternalLink size={13} />
           </a>
         )}
-      </div>
-    );
-  }
-
-  if (obj.type === 'person') {
-    return (
-      <div className="flex items-center gap-2 text-sm text-white/50">
-        <User size={13} />
-        <span className="text-white/30 text-xs">Person profile</span>
       </div>
     );
   }

@@ -145,3 +145,52 @@ html, body {
   background: #0f0f1a;
   color: white;
 }
+
+/* ── Light theme overrides ─────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --tw-bg-opacity: 1;
+}
+
+[data-theme="light"] body,
+[data-theme="light"] html {
+  background: #f5f5f7;
+  color: #1a1a2e;
+}
+
+/* Background overrides for light theme — target elements by role */
+[data-theme="light"] aside               { background-color: #ffffff !important; }
+[data-theme="light"] header              { background-color: #f8f8fc !important; }
+[data-theme="light"] main                { background-color: #f5f5f7 !important; }
+[data-theme="light"] .graph-bg           { background-color: #e8e8f0 !important; }
+[data-theme="light"] canvas              { background-color: #e8e8f0 !important; }
+
+[data-theme="light"] .text-white       { color: #1a1a2e; }
+[data-theme="light"] .text-white\/80   { color: rgba(26,26,46,0.8); }
+[data-theme="light"] .text-white\/70   { color: rgba(26,26,46,0.7); }
+[data-theme="light"] .text-white\/60   { color: rgba(26,26,46,0.6); }
+[data-theme="light"] .text-white\/50   { color: rgba(26,26,46,0.5); }
+[data-theme="light"] .text-white\/40   { color: rgba(26,26,46,0.4); }
+[data-theme="light"] .text-white\/30   { color: rgba(26,26,46,0.3); }
+[data-theme="light"] .text-white\/20   { color: rgba(26,26,46,0.2); }
+
+[data-theme="light"] .border-white\/10 { border-color: rgba(26,26,46,0.1); }
+[data-theme="light"] .border-white\/5  { border-color: rgba(26,26,46,0.05); }
+
+[data-theme="light"] .bg-white\/5      { background-color: rgba(26,26,46,0.05); }
+[data-theme="light"] .bg-white\/10     { background-color: rgba(26,26,46,0.08); }
+[data-theme="light"] .hover\:bg-white\/5:hover  { background-color: rgba(26,26,46,0.05); }
+[data-theme="light"] .hover\:bg-white\/10:hover { background-color: rgba(26,26,46,0.08); }
+
+[data-theme="light"] .ProseMirror h1,
+[data-theme="light"] .ProseMirror h2,
+[data-theme="light"] .ProseMirror h3 { color: #1a1a2e; }
+[data-theme="light"] .ProseMirror p,
+[data-theme="light"] .ProseMirror ul,
+[data-theme="light"] .ProseMirror ol,
+[data-theme="light"] .ProseMirror li  { color: rgba(26,26,46,0.75); }
+[data-theme="light"] .ProseMirror blockquote { color: rgba(26,26,46,0.55); }
+[data-theme="light"] .ProseMirror code { background: rgba(26,26,46,0.07); color: #7c3aed; }
+[data-theme="light"] .ProseMirror pre  { background: rgba(26,26,46,0.05); }
+
+[data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(26,26,46,0.15); }
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: rgba(26,26,46,0.25); }

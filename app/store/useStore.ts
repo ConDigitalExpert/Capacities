@@ -4,6 +4,8 @@ import { useState, useCallback, useEffect } from 'react';
 import { CapacityObject, ObjectType } from '../lib/types';
 import { loadObjects, saveObjects } from '../lib/storage';
 import { generateSeeds } from '../lib/seeds';
+import { searchObjects } from '../lib/search';
+import { loadTheme, saveTheme, applyTheme, Theme } from '../lib/theme';
 import { v4 as uuidv4 } from 'uuid';
 
 export function useStore() {
@@ -12,9 +14,15 @@ export function useStore() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [initialized, setInitialized] = useState(false);
+  const [theme, setThemeState] = useState<Theme>('dark');
+  const [view, setView] = useState<'editor' | 'graph' | 'calendar'>('editor');
 
   useEffect(() => {
     const stored = loadObjects();
+    const t = loadTheme();
+    applyTheme(t);
+    setThemeState(t);
+
     if (stored.length === 0) {
       const seeds = generateSeeds();
       saveObjects(seeds);
@@ -31,6 +39,16 @@ export function useStore() {
     setObjectsState(updated);
     saveObjects(updated);
   }, []);
+
+  const setTheme = useCallback((t: Theme) => {
+    setThemeState(t);
+    saveTheme(t);
+    applyTheme(t);
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    setTheme(theme === 'dark' ? 'light' : 'dark');
+  }, [theme, setTheme]);
 
   const createObject = useCallback(
     (type: ObjectType, extra?: Partial<CapacityObject>): CapacityObject => {
@@ -52,17 +70,17 @@ export function useStore() {
       setSelectedId(newObj.id);
       return newObj;
     },
-    [objects, setObjects]
+    [objects, setObjects],
   );
 
   const updateObject = useCallback(
     (id: string, patch: Partial<CapacityObject>) => {
       const updated = objects.map((o) =>
-        o.id === id ? { ...o, ...patch, updatedAt: new Date().toISOString() } : o
+        o.id === id ? { ...o, ...patch, updatedAt: new Date().toISOString() } : o,
       );
       setObjects(updated);
     },
-    [objects, setObjects]
+    [objects, setObjects],
   );
 
   const deleteObject = useCallback(
@@ -73,7 +91,7 @@ export function useStore() {
         setSelectedId(updated[0]?.id ?? null);
       }
     },
-    [objects, setObjects, selectedId]
+    [objects, setObjects, selectedId],
   );
 
   const addLink = useCallback(
@@ -89,34 +107,47 @@ export function useStore() {
       });
       setObjects(updated);
     },
-    [objects, setObjects]
+    [objects, setObjects],
+  );
+
+  /** Replace all objects (used for JSON import) */
+  const importObjects = useCallback(
+    (incoming: CapacityObject[]) => {
+      setObjects(incoming);
+      setSelectedId(incoming[0]?.id ?? null);
+    },
+    [setObjects],
   );
 
   const selectedObject = objects.find((o) => o.id === selectedId) ?? null;
 
-  const filteredObjects = searchQuery.trim()
-    ? objects.filter(
-        (o) =>
-          o.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          o.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
-    : objects;
+  const searchResults = searchQuery.trim()
+    ? searchObjects(objects, searchQuery)
+    : null;
+
+  const filteredObjects = searchResults ? searchResults.map((r) => r.obj) : objects;
 
   return {
     objects,
     filteredObjects,
+    searchResults,
     selectedId,
     selectedObject,
     searchQuery,
     sidebarOpen,
     initialized,
+    theme,
+    view,
     setSelectedId,
     setSearchQuery,
     setSidebarOpen,
+    setView,
+    toggleTheme,
     createObject,
     updateObject,
     deleteObject,
     addLink,
+    importObjects,
   };
 }
 

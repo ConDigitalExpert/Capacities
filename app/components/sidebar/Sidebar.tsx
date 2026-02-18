@@ -6,16 +6,18 @@ import {
   Video, Tag, ChevronRight, ChevronDown, X, PanelLeft,
 } from 'lucide-react';
 import { CapacityObject, ObjectType } from '../../lib/types';
-import { format } from 'date-fns';
+import { SearchResult } from '../../lib/search';
 
 interface Props {
   objects: CapacityObject[];
   selectedId: string | null;
   searchQuery: string;
+  searchResults: SearchResult[] | null;
   onSelect: (id: string) => void;
   onCreate: (type: ObjectType) => void;
   onSearch: (q: string) => void;
   onClose: () => void;
+  onTodayNote: () => void;
 }
 
 const TYPE_SECTIONS: { type: ObjectType; label: string; icon: React.ReactNode }[] = [
@@ -28,22 +30,17 @@ const TYPE_SECTIONS: { type: ObjectType; label: string; icon: React.ReactNode }[
   { type: 'tag', label: 'Tags', icon: <Tag size={15} /> },
 ];
 
-export default function Sidebar({ objects, selectedId, searchQuery, onSelect, onCreate, onSearch, onClose }: Props) {
+export default function Sidebar({
+  objects, selectedId, searchQuery, searchResults,
+  onSelect, onCreate, onSearch, onClose, onTodayNote,
+}: Props) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const toggle = (type: string) =>
     setCollapsed((c) => ({ ...c, [type]: !c[type] }));
 
-  const filtered = searchQuery.trim()
-    ? objects.filter(
-        (o) =>
-          o.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          o.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
-    : null;
-
   return (
-    <aside className="flex flex-col h-full w-64 bg-[#1a1a2e] border-r border-white/10 text-sm select-none">
+    <aside className="flex flex-col h-full w-64 shrink-0 bg-[#1a1a2e] border-r border-white/10 text-sm select-none">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
         <span className="font-semibold text-white tracking-wide text-base">⚡ Capacities</span>
@@ -73,15 +70,33 @@ export default function Sidebar({ objects, selectedId, searchQuery, onSelect, on
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto py-2 space-y-1">
-        {filtered ? (
-          // Search results
+        {searchResults ? (
+          // Search results with score context
           <div className="px-2">
-            <p className="text-white/30 text-xs uppercase tracking-widest px-2 mb-1">Results</p>
-            {filtered.length === 0 && (
-              <p className="text-white/30 px-2 py-4 text-center">Nothing found.</p>
+            <p className="text-white/30 text-xs uppercase tracking-widest px-2 mb-1">
+              {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
+            </p>
+            {searchResults.length === 0 && (
+              <p className="text-white/30 px-2 py-4 text-center text-xs">Nothing found.</p>
             )}
-            {filtered.map((obj) => (
-              <ObjectRow key={obj.id} obj={obj} selected={obj.id === selectedId} onSelect={onSelect} />
+            {searchResults.map(({ obj, matchedIn }) => (
+              <button
+                key={obj.id}
+                onClick={() => onSelect(obj.id)}
+                className={`flex flex-col w-full px-3 py-2 rounded-md text-left transition-colors mb-0.5 ${
+                  obj.id === selectedId
+                    ? 'bg-violet-600/30 text-white'
+                    : 'text-white/60 hover:bg-white/5 hover:text-white/90'
+                }`}
+              >
+                <span className="flex items-center gap-2 truncate">
+                  <span>{obj.icon ?? '📝'}</span>
+                  <span className="truncate text-sm">{obj.title}</span>
+                </span>
+                {matchedIn.includes('content') && !matchedIn.includes('title') && (
+                  <span className="text-white/30 text-xs pl-6">matched in content</span>
+                )}
+              </button>
             ))}
           </div>
         ) : (
@@ -101,15 +116,24 @@ export default function Sidebar({ objects, selectedId, searchQuery, onSelect, on
                   </span>
                   <span className="flex items-center gap-1">
                     <span className="text-white/30 text-xs">{items.length}</span>
-                    <span className="opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); onCreate(type); }}>
+                    <span
+                      className="opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => { e.stopPropagation(); onCreate(type); }}
+                    >
                       <Plus size={12} />
                     </span>
                     {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                   </span>
                 </button>
-                {isOpen && items.map((obj) => (
-                  <ObjectRow key={obj.id} obj={obj} selected={obj.id === selectedId} onSelect={onSelect} />
-                ))}
+                {isOpen &&
+                  items.map((obj) => (
+                    <ObjectRow
+                      key={obj.id}
+                      obj={obj}
+                      selected={obj.id === selectedId}
+                      onSelect={onSelect}
+                    />
+                  ))}
               </div>
             );
           })
@@ -119,15 +143,7 @@ export default function Sidebar({ objects, selectedId, searchQuery, onSelect, on
       {/* Footer */}
       <div className="border-t border-white/10 px-4 py-3">
         <button
-          onClick={() => {
-            const today = format(new Date(), 'yyyy-MM-dd');
-            const existing = objects.find((o) => o.type === 'daily' && o.date === today);
-            if (existing) {
-              onSelect(existing.id);
-            } else {
-              onCreate('daily');
-            }
-          }}
+          onClick={onTodayNote}
           className="flex items-center gap-2 text-white/50 hover:text-white transition-colors text-xs"
         >
           <Calendar size={14} />
@@ -138,7 +154,15 @@ export default function Sidebar({ objects, selectedId, searchQuery, onSelect, on
   );
 }
 
-function ObjectRow({ obj, selected, onSelect }: { obj: CapacityObject; selected: boolean; onSelect: (id: string) => void }) {
+function ObjectRow({
+  obj,
+  selected,
+  onSelect,
+}: {
+  obj: CapacityObject;
+  selected: boolean;
+  onSelect: (id: string) => void;
+}) {
   return (
     <button
       onClick={() => onSelect(obj.id)}
