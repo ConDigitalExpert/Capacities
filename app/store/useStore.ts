@@ -110,6 +110,22 @@ export function useStore() {
     [objects, setObjects],
   );
 
+  const removeLink = useCallback(
+    (fromId: string, toId: string) => {
+      const updated = objects.map((o) => {
+        if (o.id === fromId) {
+          return { ...o, linkedIds: o.linkedIds.filter((id) => id !== toId), updatedAt: new Date().toISOString() };
+        }
+        if (o.id === toId) {
+          return { ...o, linkedIds: o.linkedIds.filter((id) => id !== fromId), updatedAt: new Date().toISOString() };
+        }
+        return o;
+      });
+      setObjects(updated);
+    },
+    [objects, setObjects],
+  );
+
   /** Replace all objects (used for JSON import) */
   const importObjects = useCallback(
     (incoming: CapacityObject[]) => {
@@ -147,6 +163,7 @@ export function useStore() {
     updateObject,
     deleteObject,
     addLink,
+    removeLink,
     importObjects,
   };
 }

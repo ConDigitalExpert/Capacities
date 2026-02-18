@@ -119,10 +119,31 @@ function nodeToMarkdown(node: TNode): string {
         .split('\n')
         .map((l) => `> ${l}`)
         .join('\n') + '\n';
-    case 'codeBlock':
-      return `\`\`\`\n${nodesToMarkdown(node.content ?? [])}\n\`\`\`\n`;
+    case 'codeBlock': {
+      const lang = (node.attrs?.language as string) ?? '';
+      return `\`\`\`${lang}\n${nodesToMarkdown(node.content ?? [])}\n\`\`\`\n`;
+    }
+    case 'wikilink':
+      return `[[${node.attrs?.label ?? ''}]]`;
     case 'hardBreak':
       return '\n';
+    case 'tableRow':
+      return '| ' + (node.content ?? []).map(nodeToMarkdown).join(' | ') + ' |\n';
+    case 'tableHeader':
+    case 'tableCell':
+      return nodesToMarkdown(node.content ?? []).trim();
+    case 'table': {
+      const rows = node.content ?? [];
+      const md = rows.map(nodeToMarkdown).join('');
+      // Insert separator after first row (header)
+      const lines = md.split('\n').filter(Boolean);
+      if (lines.length > 0) {
+        const cols = (lines[0].match(/\|/g) ?? []).length - 1;
+        const sep = '| ' + Array(cols).fill('---').join(' | ') + ' |';
+        lines.splice(1, 0, sep);
+      }
+      return lines.join('\n') + '\n';
+    }
     default:
       return nodesToMarkdown(node.content ?? []);
   }

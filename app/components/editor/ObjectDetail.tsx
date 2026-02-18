@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CapacityObject, ObjectType } from '../../lib/types';
 import { templatesByType } from '../../lib/templates';
 import { exportMarkdown } from '../../lib/export';
@@ -8,7 +8,7 @@ import RichEditor from './RichEditor';
 import {
   Tag, Link2, Trash2, User, Newspaper,
   Plus, X, ExternalLink, ArrowLeft, Download,
-  LayoutTemplate, ChevronDown,
+  LayoutTemplate, ChevronDown, Circle, Clock, CheckCircle2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -19,6 +19,7 @@ interface Props {
   onDelete: (id: string) => void;
   onSelect: (id: string) => void;
   onLink: (fromId: string, toId: string) => void;
+  onRemoveLink: (fromId: string, toId: string) => void;
   onBack?: () => void;
 }
 
@@ -32,11 +33,30 @@ const TYPE_COLORS: Record<ObjectType, string> = {
   tag: 'bg-gray-500/20 text-gray-300',
 };
 
-export default function ObjectDetail({ obj, allObjects, onUpdate, onDelete, onSelect, onLink, onBack }: Props) {
+const STATUS_OPTIONS: { value: CapacityObject['status']; label: string; icon: React.ReactNode; color: string }[] = [
+  { value: 'todo', label: 'To Do', icon: <Circle size={13} />, color: 'text-white/40 hover:text-white/70' },
+  { value: 'in-progress', label: 'In Progress', icon: <Clock size={13} />, color: 'text-amber-400' },
+  { value: 'done', label: 'Done', icon: <CheckCircle2 size={13} />, color: 'text-green-400' },
+];
+
+export default function ObjectDetail({ obj, allObjects, onUpdate, onDelete, onSelect, onLink, onRemoveLink, onBack }: Props) {
   const [tagInput, setTagInput] = useState('');
   const [showLinkPicker, setShowLinkPicker] = useState(false);
   const [linkSearch, setLinkSearch] = useState('');
   const [showTemplates, setShowTemplates] = useState(false);
+
+  // Listen for wikilink clicks inside the editor
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      const el = (e.target as HTMLElement).closest('[data-wikilink]');
+      if (el) {
+        const id = el.getAttribute('data-wikilink');
+        if (id) onSelect(id);
+      }
+    };
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [onSelect]);
 
   // Backlinks: objects that link TO this one
   const backlinks = allObjects.filter(
@@ -80,6 +100,11 @@ export default function ObjectDetail({ obj, allObjects, onUpdate, onDelete, onSe
     onUpdate(obj.id, { content: JSON.stringify(content) });
     setShowTemplates(false);
   };
+
+  // Objects that have this tag (for tag-type objects)
+  const taggedObjects = obj.type === 'tag'
+    ? allObjects.filter((o) => o.id !== obj.id && o.tags.includes(obj.title.toLowerCase()))
+    : [];
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
@@ -166,6 +191,9 @@ export default function ObjectDetail({ obj, allObjects, onUpdate, onDelete, onSe
           />
         </div>
 
+        {/* Status bar */}
+        <StatusBar obj={obj} onUpdate={onUpdate} />
+
         {/* Type-specific metadata */}
         <TypeMeta obj={obj} onUpdate={onUpdate} />
 
@@ -195,13 +223,32 @@ export default function ObjectDetail({ obj, allObjects, onUpdate, onDelete, onSe
           />
         </div>
 
+        {/* Tag page: show all objects with this tag */}
+        {obj.type === 'tag' && (
+          <div className="border border-white/10 rounded-xl p-4 space-y-2 bg-white/3">
+            <p className="text-white/40 text-xs uppercase tracking-widest flex items-center gap-1.5">
+              <Tag size={12} /> Objects tagged &ldquo;{obj.title.toLowerCase()}&rdquo; ({taggedObjects.length})
+            </p>
+            {taggedObjects.length === 0 ? (
+              <p className="text-white/20 text-xs">No objects have this tag yet. Add &ldquo;{obj.title.toLowerCase()}&rdquo; as a tag on any object.</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-1.5">
+                {taggedObjects.map((tagged) => (
+                  <LinkedCard key={tagged.id} obj={tagged} onSelect={onSelect} typeColors={TYPE_COLORS} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="border-t border-white/5" />
 
         {/* Editor */}
         <RichEditor
           content={obj.content}
           onChange={(json) => onUpdate(obj.id, { content: json })}
-          placeholder="Start writing…"
+          placeholder={obj.type === 'tag' ? 'Notes about this tag…' : 'Start writing… type [[ to link objects'}
+          allObjects={allObjects}
         />
 
         {/* ── Links section ───────────────────────────────────────────────────── */}
@@ -255,10 +302,16 @@ export default function ObjectDetail({ obj, allObjects, onUpdate, onDelete, onSe
 
             <div className="grid grid-cols-1 gap-1.5">
               {linkedObjects.map((linked) => (
-                <LinkedCard key={linked.id} obj={linked} onSelect={onSelect} typeColors={TYPE_COLORS} />
+                <LinkedCard
+                  key={linked.id}
+                  obj={linked}
+                  onSelect={onSelect}
+                  typeColors={TYPE_COLORS}
+                  onRemove={() => onRemoveLink(obj.id, linked.id)}
+                />
               ))}
               {linkedObjects.length === 0 && (
-                <p className="text-white/20 text-xs">No links yet. Add one above.</p>
+                <p className="text-white/20 text-xs">No links yet. Add one above or type [[ in the editor.</p>
               )}
             </div>
           </div>
@@ -285,31 +338,75 @@ export default function ObjectDetail({ obj, allObjects, onUpdate, onDelete, onSe
   );
 }
 
+function StatusBar({
+  obj,
+  onUpdate,
+}: {
+  obj: CapacityObject;
+  onUpdate: (id: string, p: Partial<CapacityObject>) => void;
+}) {
+  const current = STATUS_OPTIONS.find((s) => s.value === obj.status);
+  return (
+    <div className="flex items-center gap-1">
+      {STATUS_OPTIONS.map((s) => (
+        <button
+          key={s.value}
+          onClick={() => onUpdate(obj.id, { status: obj.status === s.value ? undefined : s.value })}
+          title={s.label}
+          className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-colors ${
+            obj.status === s.value
+              ? 'border-white/20 bg-white/10 ' + s.color
+              : 'border-transparent text-white/20 hover:text-white/50 hover:border-white/10'
+          }`}
+        >
+          {s.icon}
+          {obj.status === s.value && <span>{s.label}</span>}
+        </button>
+      ))}
+      {current && (
+        <span className="text-white/20 text-xs ml-1">· click to clear</span>
+      )}
+    </div>
+  );
+}
+
 function LinkedCard({
   obj,
   onSelect,
   typeColors,
   dim,
+  onRemove,
 }: {
   obj: CapacityObject;
   onSelect: (id: string) => void;
   typeColors: Record<ObjectType, string>;
   dim?: boolean;
+  onRemove?: () => void;
 }) {
   return (
-    <button
-      onClick={() => onSelect(obj.id)}
+    <div
       className={`flex items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors group ${
         dim ? 'bg-white/3 hover:bg-white/6' : 'bg-white/5 hover:bg-white/10'
       }`}
     >
-      <span>{obj.icon}</span>
-      <div className="flex-1 min-w-0">
-        <p className="text-white/80 text-sm font-medium truncate">{obj.title}</p>
-      </div>
-      <span className={`text-xs px-1.5 py-0.5 rounded ${typeColors[obj.type]}`}>{obj.type}</span>
-      <ExternalLink size={11} className="text-white/20 group-hover:text-white/50 shrink-0" />
-    </button>
+      <button onClick={() => onSelect(obj.id)} className="flex items-center gap-3 flex-1 min-w-0 text-left">
+        <span>{obj.icon}</span>
+        <div className="flex-1 min-w-0">
+          <p className="text-white/80 text-sm font-medium truncate">{obj.title}</p>
+        </div>
+        <span className={`text-xs px-1.5 py-0.5 rounded ${typeColors[obj.type]}`}>{obj.type}</span>
+        <ExternalLink size={11} className="text-white/20 group-hover:text-white/50 shrink-0" />
+      </button>
+      {onRemove && (
+        <button
+          onClick={onRemove}
+          className="text-white/0 group-hover:text-white/30 hover:!text-red-400 transition-colors shrink-0"
+          title="Remove link"
+        >
+          <X size={13} />
+        </button>
+      )}
+    </div>
   );
 }
 

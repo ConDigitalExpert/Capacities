@@ -268,6 +268,7 @@ export default function Home() {
                   onDelete={store.deleteObject}
                   onSelect={handleSelect}
                   onLink={store.addLink}
+                  onRemoveLink={store.removeLink}
                 />
               </div>
             ) : (

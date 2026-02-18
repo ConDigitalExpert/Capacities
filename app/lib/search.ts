@@ -12,6 +12,7 @@ export function extractText(jsonContent: string): string {
 
 function nodeToText(node: Record<string, unknown>): string {
   if (node.type === 'text') return (node.text as string) ?? '';
+  if (node.type === 'wikilink') return (node.attrs as Record<string, string>)?.label ?? '';
   const content = node.content as Record<string, unknown>[] | undefined;
   if (!content) return '';
   return content.map(nodeToText).join(' ');
